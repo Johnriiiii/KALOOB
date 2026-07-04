@@ -19,7 +19,8 @@
     "start": "expo start --web",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build": "cd frontend && npm install && npm run build"
   },
   "private": true
 }
