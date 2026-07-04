@@ -1,5 +1,6 @@
 {
   "version": 3,
+  "outputDirectory": "frontend/dist",
   "builds": [
     {
       "src": "package.json",
