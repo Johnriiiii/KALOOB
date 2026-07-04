@@ -31,7 +31,7 @@ const connectionString = mongoUri
   ? mongoUri
   : mongoUsername && mongoPassword
   ? `mongodb://${encodeURIComponent(mongoUsername)}:${encodeURIComponent(mongoPassword)}@127.0.0.1:27017/${mongoDbName}`
-  : 'mongodb://127.0.0.1:27017/kaloob';
+  : null;
 
 const rawBodySaver = (request, _response, buffer, encoding) => {
   if (buffer && buffer.length) {
@@ -123,6 +123,11 @@ app.use((request, response) => {
 // ============================================================================
 
 async function start() {
+  if (!connectionString) {
+    console.error('MongoDB connection failed: MONGODB_URI is not set in the environment.');
+    process.exit(1);
+  }
+
   console.log('Using MongoDB connection string:', connectionString.startsWith('mongodb://127.0.0.1') ? 'local fallback' : connectionString.replace(/^(mongodb\+srv:\/\/[^:]+):.*@/, '$1:*****@'));
   
   try {

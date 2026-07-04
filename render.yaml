@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: kaloob-backend
+    env: node
+    region: oregon
+    branch: master
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: "4000"
+      - key: CORS_ORIGIN
+        value: "*"

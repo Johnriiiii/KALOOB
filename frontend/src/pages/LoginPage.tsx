@@ -28,18 +28,33 @@ export default function LoginPage({ onLogin, apiUrl }: { onLogin: (session: User
     setError('');
 
     try {
-      const response = await fetch(`${apiUrl}/api/auth/login`, {
+      const trimmedApiUrl = apiUrl?.trim();
+      if (!trimmedApiUrl) {
+        throw new Error('Missing API URL. Set VITE_API_BASE_URL in your frontend environment.');
+      }
+
+      const response = await fetch(`${trimmedApiUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
 
-      if (!response.ok) {
-        const payload = await response.json();
-        throw new Error(payload.message ?? 'Login failed');
+      const responseText = await response.text();
+      let payload: { token?: string; user?: any; message?: string } = {};
+      try {
+        payload = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        payload = { message: responseText || response.statusText };
       }
 
-      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.message || `Login failed (${response.status})`);
+      }
+
+      if (!payload.token || !payload.user) {
+        throw new Error('Invalid login response from server.');
+      }
+
       onLogin({ token: payload.token, role: payload.user.role, label: payload.user.label, churchId: payload.user.churchId });
     } catch (err) {
       setError((err as Error).message);

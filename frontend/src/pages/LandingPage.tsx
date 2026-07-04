@@ -227,7 +227,6 @@ export default function LandingPage() {
         donorEmail: 'guest@kaloob.local',
         donorPhone: '',
         churchName: selectedChapelSummary?.name ?? selectedChurch,
-        chapelId: selectedChapelSummary?.chapelId,
         purpose: 'Parish donation',
       };
 
@@ -346,7 +345,9 @@ export default function LandingPage() {
             </div>
             <div className="landing-navbar-actions">
               <Link to="/login" className="nav-link login-link">Login</Link>
-              <button type="button" className="gradient-btn" onClick={() => scrollToSection('donate')}>Donate Now</button>
+              <button type="button" className="gradient-btn" onClick={() => scrollToSection('donate')}>
+                Donate Now
+              </button>
             </div>
           </div>
         </nav>
@@ -362,8 +363,9 @@ export default function LandingPage() {
               {loading && <p className="hero-subtext">Loading chapel data...</p>}
               {fetchError && <p className="hero-error">{fetchError}</p>}
               <div className="hero-actions">
-                <button type="button" className="btn-neon-green" onClick={() => scrollToSection('about')}>Learn More</button>
-                <Link to="/login" className="btn-neon-yellow">Explore</Link>
+                <button type="button" className="gradient-btn large" onClick={() => scrollToSection('donate')}>Donate Now</button>
+                <button type="button" className="hero-secondary" onClick={() => scrollToSection('about')}>Learn More</button>
+                <Link to="/login" className="hero-secondary">Explore</Link>
               </div>
             </div>
 
@@ -531,6 +533,10 @@ export default function LandingPage() {
                 <p>
                   Every donation helps strengthen our church community. Choose your church and make a difference today.
                 </p>
+                <div className="donate-actions">
+                  <button type="button" className="gradient-btn">Donate Now</button>
+                  <button type="button" className="hero-secondary">Learn More</button>
+                </div>
                 <div className="donate-badges">
                   <span>🔒 Secured</span>
                   <span>🛡️ Encrypted</span>
