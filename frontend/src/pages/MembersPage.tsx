@@ -144,7 +144,7 @@ export default function MembersPage({ session, chapel, chapels }: { session: Use
           <div className="glass-card panel-card card-3d">
             <h3>Bulk Import</h3>
             <p className="panel-copy">Upload Excel, PDF, or Word files to import members and donations for all chapels (uploads must be done by chapel admin).</p>
-            <FileUpload apiUrl={apiUrl} token={session.token} chapels={chapels} onSuccess={() => { window.location.reload(); }} />
+            <FileUpload apiUrl={apiUrl} token={session.token} chapels={chapels} showChapelSelector={session.role === 'superadmin'} onSuccess={() => { window.location.reload(); }} />
           </div>
         </div>
       </div>

@@ -5,10 +5,11 @@ interface FileUploadProps {
   apiUrl: string;
   token: string;
   chapels: Chapel[];
+  showChapelSelector?: boolean;
   onSuccess?: () => void;
 }
 
-export default function FileUpload({ apiUrl, token, chapels, onSuccess }: FileUploadProps) {
+export default function FileUpload({ apiUrl, token, chapels, showChapelSelector = true, onSuccess }: FileUploadProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
   const [selectedChapel, setSelectedChapel] = useState('all');
@@ -51,13 +52,18 @@ export default function FileUpload({ apiUrl, token, chapels, onSuccess }: FileUp
       return;
     }
 
+    const fileName = selectedFile.name?.toLowerCase() || '';
+    const fileExtension = fileName.split('.').pop() ?? '';
     const validTypes = [
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
     ];
+    const validExtensions = ['xlsx', 'xls', 'pdf', 'docx'];
 
-    if (!validTypes.includes(selectedFile.type)) {
+    if (!validTypes.includes(selectedFile.type) && !validExtensions.includes(fileExtension)) {
       setError('Only .xlsx, .pdf, and .docx files are supported');
       return;
     }
@@ -117,17 +123,19 @@ export default function FileUpload({ apiUrl, token, chapels, onSuccess }: FileUp
             placeholder="Enter file description"
           />
         </label>
-        <label className="upload-field">
-          <span>Church</span>
-          <select value={selectedChapel} onChange={(e) => setSelectedChapel(e.target.value)}>
-            <option value="all">All Churches</option>
-            {chapels.map((chapel) => (
-              <option key={chapel.chapelId} value={chapel.chapelId}>
-                {chapel.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {showChapelSelector && (
+          <label className="upload-field">
+            <span>Church</span>
+            <select value={selectedChapel} onChange={(e) => setSelectedChapel(e.target.value)}>
+              <option value="all">All Churches</option>
+              {chapels.map((chapel) => (
+                <option key={chapel.chapelId} value={chapel.chapelId}>
+                  {chapel.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <button className="button button-primary upload-action-button" onClick={handleUpload} disabled={isUploading}>

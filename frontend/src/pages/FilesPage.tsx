@@ -126,7 +126,7 @@ export default function FilesPage({ session, apiUrl, chapels }: FilesPageProps) 
       </div>
 
       <div className="glass-panel file-management-panel">
-        <FileUpload apiUrl={apiUrl} token={session?.token || ''} chapels={chapels} onSuccess={fetchFiles} />
+        <FileUpload apiUrl={apiUrl} token={session?.token || ''} chapels={chapels} showChapelSelector={true} onSuccess={fetchFiles} />
       </div>
 
       <div className="glass-panel recent-uploads-panel">
