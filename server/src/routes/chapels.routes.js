@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { Chapel } from '../models/chapel.model.js';
+import { Member } from '../models/member.model.js';
 
 const router = Router();
 const jwtSecret = process.env.JWT_SECRET ?? 'kaloob-secret';
@@ -90,13 +91,26 @@ router.get('/admin/summary', async (_request, response, next) => {
   try {
     const chapels = await Chapel.find().lean();
 
-    const summary = chapels.map((chapel) => ({
-      chapelId: chapel.chapelId,
-      name: chapel.name,
-      color: chapel.color,
-      latestDonation: chapel.reports.at(-1)?.donation ?? 0,
-      latestMembers: chapel.reports.at(-1)?.members ?? 0,
-      series: chapel.reports.map((report) => report.donation),
+    const summary = await Promise.all(chapels.map(async (chapel) => {
+      const memberCount = await Member.countDocuments({ churchId: chapel.chapelId });
+      const reportedTotal = Array.isArray(chapel.reports)
+        ? chapel.reports.reduce((sum, report) => sum + (report.donation ?? 0), 0)
+        : 0;
+      const totalCollection = reportedTotal > 0
+        ? reportedTotal
+        : (typeof chapel.totalCollection === 'number' ? chapel.totalCollection : 0);
+      const latestDonation = chapel.reports.at(-1)?.donation ?? 0;
+      const latestMembers = chapel.reports.at(-1)?.members ?? 0;
+      return {
+        chapelId: chapel.chapelId,
+        name: chapel.name,
+        color: chapel.color,
+        latestDonation,
+        latestMembers,
+        memberCount,
+        totalCollection,
+        series: Array.isArray(chapel.reports) ? chapel.reports.map((report) => report.donation) : [],
+      };
     }));
 
     response.json({ summary });

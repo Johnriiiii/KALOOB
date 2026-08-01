@@ -89,7 +89,8 @@ async function getInvoiceByExternalId(externalId) {
 async function createDonationFromInvoice(invoice) {
   const metadata = invoice.metadata ?? {};
   const churchIdentifier = metadata.chapelId || metadata.churchName || invoice.description || 'KALOOB';
-  const donorName = metadata.donorName || metadata.donorEmail || 'Anonymous';
+  const anonymous = Boolean(metadata.donateAnonymously);
+  const donorName = anonymous ? 'Anonymous' : (metadata.donorName || metadata.donorEmail || 'Anonymous');
   const donorEmail = metadata.donorEmail;
   const donorPhone = metadata.donorPhone;
   const externalId = invoice.external_id || invoice.reference_id || invoice.id;
@@ -113,17 +114,8 @@ async function createDonationFromInvoice(invoice) {
     donorEmail: donorEmail ?? '',
     donorPhone: donorPhone ?? '',
     purpose: metadata.purpose ?? '',
-    notes: `Paid via Xendit invoice ${invoice.id}`,
+    notes: anonymous ? 'Anonymous donation' : `Paid via Xendit invoice ${invoice.id}`,
     createdBy: 'xendit-webhook',
-  });
-
-  await AuditLog.create({
-    action: 'create',
-    entity: 'donation',
-    entityId: donation._id.toString(),
-    userLabel: 'xendit-webhook',
-    churchId,
-    details: `Recorded donation from Xendit invoice ${invoice.id}`,
   });
 
   return { donation, alreadyCreated: false };
@@ -153,6 +145,7 @@ router.post('/checkout', async (request, response, next) => {
       donorName,
       donorEmail,
       donorPhone,
+      donateAnonymously,
       churchName,
       purpose,
     } = request.body ?? {};
@@ -181,6 +174,7 @@ router.post('/checkout', async (request, response, next) => {
       protocol: request.protocol,
     });
 
+    const normalizedDonorName = (donateAnonymously || !donorName?.trim()) ? 'Anonymous' : donorName?.trim();
     const payload = {
       external_id: referenceID,
       amount,
@@ -191,9 +185,10 @@ router.post('/checkout', async (request, response, next) => {
       metadata: {
         churchName,
         purpose,
-        donorName,
+        donorName: normalizedDonorName,
         donorEmail,
         donorPhone,
+        donateAnonymously: Boolean(donateAnonymously),
         paymentMethod,
       },
     };
@@ -286,9 +281,10 @@ router.post('/webhook', async (request, response, next) => {
 
     const metadata = invoice.metadata ?? {};
     const churchIdentifier = metadata.chapelId || metadata.churchName || invoice.description || 'KALOOB';
-    const donorName = metadata.donorName || metadata.donorEmail || 'Anonymous';
+    const donorName = metadata.donateAnonymously ? 'Anonymous' : (metadata.donorName || metadata.donorEmail || 'Anonymous');
     const donorEmail = metadata.donorEmail;
     const donorPhone = metadata.donorPhone;
+    const anonymous = Boolean(metadata.donateAnonymously);
     const externalId = invoice.external_id || invoice.reference_id || invoice.id;
     const trackingNumber = `XENDIT-${externalId}`;
     const churchId = await resolveChurchId(churchIdentifier);

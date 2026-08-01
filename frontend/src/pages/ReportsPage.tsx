@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Chapel, UserSession } from '../types';
-import { generateReportInterpretation, exportToCSV, downloadCSV, downloadPDF, downloadExcel, ReportData } from '../utils/reportExport';
+import { generateReportInterpretation, exportToCSV, downloadCSV, downloadPDF, downloadChartImage, downloadExcel, ReportData } from '../utils/reportExport';
 
 type AnalyticsPayload = {
   churchId: string;
@@ -152,7 +152,9 @@ export default function ReportsPage({ session, chapel }: { session: UserSession 
         recommendations,
       };
 
-      data.interpretation = generateReportInterpretation(data);
+      const aiInterpretation = analyticsAll[0]?.interpretation?.trim() ?? '';
+      const generatedInterpretation = generateReportInterpretation(data);
+      data.interpretation = aiInterpretation ? `${aiInterpretation}\n\n${generatedInterpretation}` : generatedInterpretation;
       return data;
     }
 
@@ -184,9 +186,14 @@ export default function ReportsPage({ session, chapel }: { session: UserSession 
 
     const data: ReportData = {
       chapel,
+      periodLabel: periodLabel,
       totalDonations,
       totalMembers,
       averageDonation,
+      donationGrowth: analytics?.donationGrowthPercentage,
+      membershipGrowth: analytics?.membershipGrowthPercentage,
+      activeMembers: analytics?.activeMembers,
+      inactiveMembers: analytics?.inactiveMembers,
       interpretation: analytics?.interpretation ?? '',
       executiveSummary: analytics?.exportData?.executiveSummary ?? [],
       statisticalSummary: analytics?.exportData?.statisticalSummary ?? [],
@@ -195,7 +202,9 @@ export default function ReportsPage({ session, chapel }: { session: UserSession 
       recommendations: analytics?.recommendations ?? [],
     };
 
-    data.interpretation = generateReportInterpretation(data);
+    const aiInterpretation = analytics?.interpretation?.trim() ?? '';
+    const generatedInterpretation = generateReportInterpretation(data);
+    data.interpretation = aiInterpretation ? `${aiInterpretation}\n\n${generatedInterpretation}` : generatedInterpretation;
     return data;
   }, [chapel, reportType, selectedWeek, analytics, analyticsAll, isSuperAdmin]);
 
@@ -207,6 +216,16 @@ export default function ReportsPage({ session, chapel }: { session: UserSession 
 
     const filename = `${reportData.chapel.name.replace(/\s+/g, '_')}-report-${new Date().toISOString().split('T')[0]}.pdf`;
     await downloadPDF(filename, reportPreviewRef.current);
+  };
+
+  const handleExportChart = async () => {
+    if (!reportPreviewRef.current) {
+      alert('Report preview is not ready yet.');
+      return;
+    }
+
+    const filename = `${reportData.chapel.name.replace(/\s+/g, '_')}-chart-${new Date().toISOString().split('T')[0]}.png`;
+    await downloadChartImage(filename, reportPreviewRef.current);
   };
 
   const handleExportExcel = async () => {
@@ -282,7 +301,10 @@ export default function ReportsPage({ session, chapel }: { session: UserSession 
             </div>
           )}
 
-          <button type="button" className="export-btn gradient-btn full-width" onClick={handleExportPDF}>Generate preview</button>
+          <div className="export-actions" style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+            <button type="button" className="export-btn gradient-btn full-width" onClick={handleExportPDF}>Export PDF</button>
+            <button type="button" className="export-btn gradient-outline full-width" onClick={handleExportExcel}>Export report</button>
+          </div>
         </div>
 
         <div className="report-preview-card">
@@ -291,7 +313,10 @@ export default function ReportsPage({ session, chapel }: { session: UserSession 
               <span className="eyebrow">Report preview</span>
               <h3>{reportData.chapel.name} summary</h3>
             </div>
-            <span className="report-period">{reportType === 'weekly' ? `Week ${selectedWeek + 1}` : reportType === 'monthly' ? 'Monthly' : 'Annual'}</span>
+            <div className="report-preview-actions">
+              <span className="report-period">{reportType === 'weekly' ? `Week ${selectedWeek + 1}` : reportType === 'monthly' ? 'Monthly' : 'Annual'}</span>
+              <button className="export-btn gradient-outline" type="button" onClick={handleExportChart}>Export chart</button>
+            </div>
           </div>
 
           <div className="report-summary-grid">
@@ -349,6 +374,7 @@ export default function ReportsPage({ session, chapel }: { session: UserSession 
               <p>Download the chapel report in the format that works best for leaders and parish teams.</p>
               <div className="export-actions">
                 <button className="export-btn gradient-btn" type="button" onClick={handleExportPDF}>Export PDF</button>
+                <button className="export-btn gradient-outline" type="button" onClick={handleExportChart}>Export chart</button>
                 <button className="export-btn gradient-outline" type="button" onClick={handleExportExcel}>Export Excel</button>
                 <button className="export-btn gradient-outline" type="button" onClick={handleExportCSV}>Export CSV</button>
               </div>
@@ -390,6 +416,11 @@ export default function ReportsPage({ session, chapel }: { session: UserSession 
                 <div className="meta-key">Prepared by</div>
                 <div className="meta-val">KALOOB Donation Management</div>
               </div>
+            </div>
+
+            <div className="chart-preview">
+              <div className="chart-preview-header">Donation comparison</div>
+              <div className="chart-placeholder">[Donation chart image placeholder]</div>
             </div>
 
             <div className="stats-row">
@@ -438,12 +469,13 @@ export default function ReportsPage({ session, chapel }: { session: UserSession 
               </ul>
             </div>
 
-            <div className="sec-label">Insights</div>
+            <div className="sec-label">AI Interpretation</div>
             <div className="interp-grid">
-              <div className="interp-box">
-                <div className="interp-box-title">Report interpretation</div>
+              <div className="interp-box interpretation-block">
+                <div className="interp-box-title">Chapel interpretation</div>
                 <div className="interp-body">
-                  {reportData.interpretation.split('\n').map((line, idx) => (
+                  <h3>Chapel: {reportData.chapel.name}</h3>
+                  {reportData.interpretation.split('\n').filter(Boolean).map((line, idx) => (
                     <p key={idx}>{line}</p>
                   ))}
                 </div>

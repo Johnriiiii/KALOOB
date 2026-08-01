@@ -106,7 +106,7 @@ router.get('/analytics', async (request, response, next) => {
 
     const donations = await getDonationsForChapel(chapel.chapelId);
     const reports = mapDonationsToReports(donations);
-    const analytics = buildAnalyticsPayload({ chapel, reports, members, range });
+    const analytics = await buildAnalyticsPayload({ chapel, reports, members, range });
     response.json({ analytics });
   } catch (error) {
     next(error);

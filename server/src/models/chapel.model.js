@@ -25,6 +25,7 @@ const chapelSchema = new mongoose.Schema(
     color: { type: String, required: true },
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
+    totalCollection: { type: Number, default: 0 },
     reports: { type: [reportSchema], default: [] },
   },
   { timestamps: true }

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { Chapel, UserSession } from '../types';
 import { AreaChart, Area, ResponsiveContainer, CartesianGrid, XAxis, YAxis, Tooltip, Legend, BarChart, Bar, Cell, PieChart, Pie } from 'recharts';
+import { downloadPDF } from '../utils/reportExport';
 
 type ChapelReport = {
   chapelId: string;
@@ -52,7 +53,18 @@ export default function DashboardPage({ session, chapel, chapels }: { session: U
   const [currentTime, setCurrentTime] = useState(new Date());
   const [range, setRange] = useState<'weekly' | 'monthly' | 'quarterly' | 'yearly'>('weekly');
   const [searchQuery, setSearchQuery] = useState('');
+  const comparisonChartRef = useRef<HTMLDivElement | null>(null);
   const apiUrl = import.meta.env.VITE_API_BASE_URL || '';
+
+  const handleExportDonationChart = async () => {
+    if (!comparisonChartRef.current) {
+      alert('Chart area not ready yet.');
+      return;
+    }
+
+    const filename = `consolidated-donation-comparison-${new Date().toISOString().split('T')[0]}.pdf`;
+    await downloadPDF(filename, comparisonChartRef.current);
+  };
 
   useEffect(() => {
     if (session?.role === 'superadmin' || session?.role === 'admin') {
@@ -288,19 +300,22 @@ export default function DashboardPage({ session, chapel, chapels }: { session: U
             </div>
 
             <div className="dashboard-grid">
-              <div className="chart-card card-3d">
+              <div className="chart-card card-3d" ref={comparisonChartRef}>
                 <div className="chart-card-header">
                   <div>
                     <h2>Consolidated weekly donation comparison</h2>
                     <p className="chart-meta">A multi-line view of all churches with hover tooltips and responsive resizing.</p>
                   </div>
-                  <div className="legend-pill-row">
-                    {chapelReports.map((report) => (
-                      <span key={report.churchId} className="legend-pill">
-                        <span className="church-dot" style={{ backgroundColor: report.color }} />
-                        {report.churchName}
-                      </span>
-                    ))}
+                  <div className="chart-header-actions">
+                    <div className="legend-pill-row">
+                      {chapelReports.map((report) => (
+                        <span key={report.churchId} className="legend-pill">
+                          <span className="church-dot" style={{ backgroundColor: report.color }} />
+                          {report.churchName}
+                        </span>
+                      ))}
+                    </div>
+                    <button className="export-btn gradient-outline" type="button" onClick={handleExportDonationChart}>Export report</button>
                   </div>
                 </div>
                 <ResponsiveContainer width="100%" height={340}>
@@ -342,6 +357,76 @@ export default function DashboardPage({ session, chapel, chapels }: { session: U
                 <div className="role-badges">
                   <span className="badge badge-green">CHURCH ADMIN</span>
                   <span className="badge badge-yellow">Super Admin</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="hidden-export-preview" aria-hidden="true" ref={comparisonChartRef}>
+              <div className="export-report-page">
+                <div className="export-report-header">
+                  <div className="export-report-brand">
+                    <img src="/logo.png" alt="KALOOB logo" className="export-logo" />
+                    <div>
+                      <p className="export-report-label">EXPORT CHART REPORT</p>
+                      <h1>{chapel.name.toUpperCase()}</h1>
+                    </div>
+                  </div>
+                  <div className="export-report-badge">Donation Report</div>
+                </div>
+
+                <div className="export-section">
+                  <div className="section-label">CHART DETAILS</div>
+                  <div className="chart-card card-3d export-chart-card">
+                    <div className="chart-card-header export-chart-header">
+                      <div>
+                        <h2>Consolidated weekly donation comparison</h2>
+                        <p className="chart-meta">A multi-line view of all churches with hover tooltips and responsive resizing.</p>
+                      </div>
+                      <div className="legend-pill-row export-legend-row">
+                        {chapelReports.map((report) => (
+                          <span key={report.churchId} className="legend-pill">
+                            <span className="church-dot" style={{ backgroundColor: report.color }} />
+                            {report.churchName}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <AreaChart data={comparisonData} margin={{ top: 20, right: 24, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 5" stroke="#b8c85a22" />
+                        <XAxis dataKey="period" stroke="#7a9b4a" />
+                        <YAxis stroke="#7a9b4a" />
+                        <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#d9d9d9', color: '#1f2937' }} labelStyle={{ color: '#1f2937' }} />
+                        <Legend wrapperStyle={{ color: '#152a13', fontSize: '0.9rem' }} />
+                        {chapelReports.map((report) => (
+                          <Area key={report.churchId} type="monotone" dataKey={report.churchId} stroke={report.color} strokeWidth={3} fillOpacity={0.22} fill={report.color} name={report.churchName} activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }} />
+                        ))}
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="export-section">
+                  <div className="section-label">INTERPRETATION</div>
+                  <div className="export-interpretation">
+                    {visibleChapelReports.length > 0 ? (
+                      visibleChapelReports.map((report) => (
+                        <div key={report.churchId} className="export-interpretation-block">
+                          <h3>{report.churchName}</h3>
+                          {(report.interpretation ?? 'AI interpretation unavailable.').split('\n').filter(Boolean).map((line, idx) => (
+                            <p key={`${report.churchId}-${idx}`}>{line}</p>
+                          ))}
+                        </div>
+                      ))
+                    ) : (
+                      <p>AI interpretation unavailable.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="export-report-footer">
+                  <span>Generated by KALOOB Donation Management System</span>
+                  <span>{new Date().toLocaleDateString('en-PH')}</span>
                 </div>
               </div>
             </div>

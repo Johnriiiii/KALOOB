@@ -139,7 +139,84 @@ function buildInterpretation({ donationChange, membershipChange, newMembers, tot
   };
 }
 
-export function buildAnalyticsPayload({ chapel, reports = [], members = [], range = 'weekly' }) {
+function buildAiPrompt({ chapel, range, totalDonations, totalMembers, activeMembers, inactiveMembers, donationChange, membershipChange, newMembers, averageWeeklyDonation, highestDonationWeek, lowestDonationWeek, recommendations, interpretation }) {
+  return [
+    'You are a parish report analyst for the KALOOB system.',
+    'Write a concise, practical interpretation of the report data in clear professional English.',
+    'Return valid JSON only with this shape: {"summary":"string","bullets":["string"],"recommendations":["string"]}.',
+    'Keep the summary to 3-5 short sentences.',
+    'Bullets should be 3 concise bullet points.',
+    'Recommendations should be 3 concise action items.',
+    '',
+    `Chapel: ${chapel?.name || 'KALOOB Chapel'}`,
+    `Range: ${range}`,
+    `Total donations: ₱${Number(totalDonations || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+    `Total members: ${totalMembers}`,
+    `Active members: ${activeMembers}`,
+    `Inactive members: ${inactiveMembers}`,
+    `Donation growth: ${Number(donationChange || 0).toFixed(1)}%`,
+    `Membership growth: ${Number(membershipChange || 0).toFixed(1)}%`,
+    `New members: ${newMembers}`,
+    `Average weekly donation: ₱${Number(averageWeeklyDonation || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+    `Highest donation week: ${highestDonationWeek?.label || 'N/A'} (${highestDonationWeek ? `₱${Number(highestDonationWeek.amount || 0).toLocaleString('en-PH')}` : 'N/A'})`,
+    `Lowest donation week: ${lowestDonationWeek?.label || 'N/A'} (${lowestDonationWeek ? `₱${Number(lowestDonationWeek.amount || 0).toLocaleString('en-PH')}` : 'N/A'})`,
+    '',
+    'Baseline interpretation to improve on:',
+    interpretation.summary,
+    '',
+    'Baseline recommendations to improve on:',
+    ...recommendations,
+  ].join('\n');
+}
+
+async function generateAiInterpretation(context) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+  const prompt = buildAiPrompt(context);
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.3,
+        messages: [
+          { role: 'system', content: 'You generate structured JSON only.' },
+          { role: 'user', content: prompt },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn('AI interpretation request failed:', response.status, await response.text());
+      return null;
+    }
+
+    const payload = await response.json();
+    const content = payload?.choices?.[0]?.message?.content;
+    if (!content) return null;
+
+    const parsed = JSON.parse(content);
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    return {
+      summary: typeof parsed.summary === 'string' ? parsed.summary : null,
+      bullets: Array.isArray(parsed.bullets) ? parsed.bullets.filter((item) => typeof item === 'string') : null,
+      recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations.filter((item) => typeof item === 'string') : null,
+    };
+  } catch (error) {
+    console.warn('AI interpretation generation failed:', error?.message || error);
+    return null;
+  }
+}
+
+export async function buildAnalyticsPayload({ chapel, reports = [], members = [], range = 'weekly' }) {
   const series = buildSeries(reports, range);
   const latest = series.at(-1) ?? { donations: 0, members: 0 };
   const previous = series.at(-2) ?? latest;
@@ -156,6 +233,25 @@ export function buildAnalyticsPayload({ chapel, reports = [], members = [], rang
 
   const recommendations = buildRecommendations(donationChange, membershipChange, totalMembers, activeMembers, inactiveMembers);
   const interpretation = buildInterpretation({ donationChange, membershipChange, newMembers, totalMembers, activeMembers, inactiveMembers });
+  const aiInterpretation = await generateAiInterpretation({
+    chapel,
+    range,
+    totalDonations,
+    totalMembers,
+    activeMembers,
+    inactiveMembers,
+    donationChange,
+    membershipChange,
+    newMembers,
+    averageWeeklyDonation,
+    highestDonationWeek: highestDonation ? { label: highestDonation.label, amount: highestDonation.donations } : null,
+    lowestDonationWeek: lowestDonation ? { label: lowestDonation.label, amount: lowestDonation.donations } : null,
+    recommendations,
+    interpretation,
+  });
+  const interpretationBullets = aiInterpretation?.bullets ?? interpretation.bulletPoints;
+  const aiRecommendations = aiInterpretation?.recommendations ?? recommendations;
+  const finalInterpretation = aiInterpretation?.summary || interpretation.summary;
 
   return {
     churchId: chapel?.chapelId || 'unknown',
@@ -179,9 +275,9 @@ export function buildAnalyticsPayload({ chapel, reports = [], members = [], rang
       members: entry.members,
       label: entry.label,
     })),
-    interpretation: interpretation.summary,
-    interpretationBullets: interpretation.bulletPoints,
-    recommendations,
+    interpretation: finalInterpretation,
+    interpretationBullets,
+    recommendations: aiRecommendations,
     exportData: {
       executiveSummary: [
         `${chapel?.name || 'KALOOB Chapel'} shows ${donationChange >= 0 ? 'positive' : 'mixed'} donation momentum during the selected ${range} period.`,
@@ -198,8 +294,8 @@ export function buildAnalyticsPayload({ chapel, reports = [], members = [], rang
         `Membership growth: ${membershipChange.toFixed(1)}%`,
         `New members recorded: ${newMembers}`,
       ],
-      interpretation: interpretation.bulletPoints,
-      recommendations,
+      interpretation: interpretationBullets,
+      recommendations: aiRecommendations,
     },
   };
 }

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:4000';
@@ -48,6 +48,10 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
   const [donationAmount, setDonationAmount] = useState('100');
+  const [donorName, setDonorName] = useState('');
+  const [donorNumber, setDonorNumber] = useState('');
+  const [donorEmail, setDonorEmail] = useState('');
+  const [donateAnonymous, setDonateAnonymous] = useState(false);
   const [donationStatus, setDonationStatus] = useState('');
   const [isDonating, setIsDonating] = useState(false);
 
@@ -55,6 +59,12 @@ export default function LandingPage() {
     const numericValue = Number(donationAmount.toString().replace(/[^0-9]/g, ''));
     return numericValue > 0 ? `₱${numericValue.toLocaleString('en-PH')}` : '';
   }, [donationAmount]);
+
+  const canDonate = donateAnonymous || (
+    donorName.trim().length > 0 &&
+    donorNumber.trim().length > 0 &&
+    donorEmail.trim().length > 0
+  );
 
   const displayChurchCards = useMemo(() => {
     const fallbackCards = [
@@ -215,6 +225,23 @@ export default function LandingPage() {
       return;
     }
 
+    if (!donateAnonymous) {
+      if (!donorName.trim()) {
+        setDonationStatus('Please enter your name.');
+        return;
+      }
+
+      if (!donorNumber.trim()) {
+        setDonationStatus('Please enter your phone number.');
+        return;
+      }
+
+      if (!donorEmail.trim()) {
+        setDonationStatus('Please enter your email.');
+        return;
+      }
+    }
+
     setIsDonating(true);
     setDonationStatus('');
 
@@ -223,11 +250,11 @@ export default function LandingPage() {
       const body = {
         amount: amountValue,
         paymentMethod: 'bank_transfer',
-        donorName: 'Guest Donor',
-        donorEmail: 'guest@kaloob.local',
-        donorPhone: '',
+        donorName: donateAnonymous ? 'Anonymous Donor' : donorName.trim(),
+        donorEmail: donateAnonymous ? 'anonymous@kaloob.local' : donorEmail.trim(),
+        donorPhone: donateAnonymous ? '' : donorNumber.trim(),
         churchName: selectedChapelSummary?.name ?? selectedChurch,
-        purpose: 'Parish donation',
+        purpose: donateAnonymous ? 'Anonymous parish donation' : 'Parish donation',
       };
 
       const response = await fetch(`${API_BASE_URL}/api/payments/checkout`, {
@@ -363,7 +390,6 @@ export default function LandingPage() {
               {loading && <p className="hero-subtext">Loading chapel data...</p>}
               {fetchError && <p className="hero-error">{fetchError}</p>}
               <div className="hero-actions">
-                <button type="button" className="gradient-btn large" onClick={() => scrollToSection('donate')}>Donate Now</button>
                 <button type="button" className="hero-secondary" onClick={() => scrollToSection('about')}>Learn More</button>
                 <Link to="/login" className="hero-secondary">Explore</Link>
               </div>
@@ -581,11 +607,50 @@ export default function LandingPage() {
                     </button>
                   ))}
                 </div>
+                <label className="donation-input-label">
+                  Name
+                  <input
+                    type="text"
+                    value={donorName}
+                    onChange={(event) => setDonorName(event.target.value)}
+                    className="glass-input donation-text-input"
+                    placeholder="Enter your name"
+                  />
+                </label>
+                <label className="donation-input-label">
+                  Number
+                  <input
+                    type="tel"
+                    value={donorNumber}
+                    onChange={(event) => setDonorNumber(event.target.value)}
+                    className="glass-input donation-text-input"
+                    placeholder="Enter your phone number"
+                  />
+                </label>
+                <label className="donation-input-label">
+                  Email
+                  <input
+                    type="email"
+                    value={donorEmail}
+                    onChange={(event) => setDonorEmail(event.target.value)}
+                    className="glass-input donation-text-input"
+                    placeholder="Enter your email"
+                    disabled={donateAnonymous}
+                  />
+                </label>
+                <label className="donation-input-label donate-anonymous">
+                  <input
+                    type="checkbox"
+                    checked={donateAnonymous}
+                    onChange={(event) => setDonateAnonymous(event.target.checked)}
+                  />
+                  Donate anonymously
+                </label>
                 <button
                   type="button"
                   className="gradient-btn donation-submit"
                   onClick={handleDonate}
-                  disabled={isDonating}
+                  disabled={isDonating || !canDonate}
                 >
                   {isDonating ? 'Processing…' : `Donate ${formattedDonationAmount || 'Now'}`}
                 </button>
