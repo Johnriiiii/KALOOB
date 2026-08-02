@@ -28,13 +28,6 @@ type ChapelSummary = {
   series: number[];
 };
 
-const defaultDonationTickerItems = [
-  { name: 'Juan Dela Cruz', amount: '₱1,500', time: '2 min ago' },
-  { name: 'Maria Santos', amount: '₱2,000', time: '5 min ago' },
-  { name: 'Pedro Reyes', amount: '₱850', time: '12 min ago' },
-  { name: 'Ana Garcia', amount: '₱350', time: '18 min ago' },
-];
-
 const notifications = [
   { icon: '💚', label: 'Juan Dela Cruz donated ₱1,500 to St. Joseph Parish', time: '2 min ago' },
   { icon: '👤', label: 'Maria Santos joined as new member', time: '15 min ago' },
@@ -42,7 +35,7 @@ const notifications = [
 ];
 
 export default function LandingPage() {
-  const [selectedChurch, setSelectedChurch] = useState('St. Joseph Parish');
+  const [selectedChurch, setSelectedChurch] = useState('');
   const [chapelsData, setChapelsData] = useState<ChapelData[]>([]);
   const [chapelsSummary, setChapelsSummary] = useState<ChapelSummary[]>([]);
   const [summaryTotals, setSummaryTotals] = useState<{ totalMembers: number; totalAnnualDonations: number; growthPercentage: number } | null>(null);
@@ -53,6 +46,7 @@ export default function LandingPage() {
   const [donorNumber, setDonorNumber] = useState('');
   const [donorEmail, setDonorEmail] = useState('');
   const [donateAnonymous, setDonateAnonymous] = useState(false);
+  const [isCustomAmount, setIsCustomAmount] = useState(false);
   const [donationStatus, setDonationStatus] = useState('');
   const [isDonating, setIsDonating] = useState(false);
 
@@ -68,54 +62,34 @@ export default function LandingPage() {
   );
 
   const displayChurchCards = useMemo(() => {
-    const fallbackCards = [
-      { name: 'St. Joseph Parish', amount: '₱42,100', details: '412 members · ₱8.4k weekly', change: '+8.2%', color: '#4a7a3a' },
-      { name: 'St. Joseph the Worker', amount: '₱38,200', details: '356 members · ₱7.2k weekly', change: '+6.5%', color: '#d4c04a' },
-      { name: 'Our Lady of Lourdes', amount: '₱31,800', details: '328 members · ₱6.2k weekly', change: '+5.8%', color: '#3b82f6' },
-      { name: 'Sto. Niño Chapel', amount: '₱27,000', details: '307 members · ₱5.4k weekly', change: '+4.2%', color: '#dc2626' },
-    ];
+    if (chapelsSummary.length === 0) return [];
 
-    if (chapelsSummary.length > 0) {
-      const summaryCards = chapelsSummary.map((chapel) => {
-        const previous = chapel.series.length > 1 ? chapel.series[chapel.series.length - 2] : chapel.latestDonation;
-        const change = previous === 0 ? '+0%' : `${Math.round(((chapel.latestDonation - previous) / previous) * 100)}%`;
-        return {
-          name: chapel.name,
-          amount: `₱${chapel.latestDonation.toLocaleString('en-PH')}`,
-          details: `${chapel.latestMembers} members · latest`,
-          change,
-          color: chapel.color || '#4a7a3a',
-        };
-      });
-
-      if (summaryCards.length >= 4) {
-        return summaryCards.slice(0, 4);
-      }
-
-      return [...summaryCards, ...fallbackCards.slice(summaryCards.length)];
-    }
-
-    return fallbackCards;
+    return chapelsSummary.slice(0, 4).map((chapel) => {
+      const previous = chapel.series.length > 1 ? chapel.series[chapel.series.length - 2] : chapel.latestDonation;
+      const change = previous === 0 ? '+0%' : `${Math.round(((chapel.latestDonation - previous) / previous) * 100)}%`;
+      return {
+        name: chapel.name,
+        amount: `₱${chapel.latestDonation.toLocaleString('en-PH')}`,
+        details: `${chapel.latestMembers.toLocaleString('en-PH')} members · latest`,
+        change,
+        color: chapel.color || '#4a7a3a',
+      };
+    });
   }, [chapelsSummary]);
 
   const displayStatsCards = useMemo(() => {
-    if (summaryTotals && chapelsData.length > 0 && chapelsSummary.length > 0) {
-      const totalChurches = chapelsData.length;
-      return [
-        { value: totalChurches, label: 'Churches' },
-        { value: summaryTotals.totalMembers, label: 'KALOOB Members' },
-        { value: summaryTotals.totalAnnualDonations / 1_000_000, suffix: 'M', label: 'Annual donations' },
-        { value: summaryTotals.growthPercentage, suffix: '%', label: 'Growth rate' },
-      ];
-    }
+    const totalChurches = chapelsData.length;
+    const totalMembers = summaryTotals?.totalMembers ?? 0;
+    const totalAnnualDonations = summaryTotals?.totalAnnualDonations ?? 0;
+    const growthPercentage = summaryTotals?.growthPercentage ?? 0;
 
     return [
-      { value: 4, label: 'Churches' },
-      { value: 1284, label: 'KALOOB Members' },
-      { value: 2.4, suffix: 'M', label: 'Annual donations' },
-      { value: 15, suffix: '%', label: 'Growth rate' },
+      { value: totalChurches, label: 'Churches' },
+      { value: totalMembers, label: 'KALOOB Members' },
+      { value: totalAnnualDonations / 1_000_000, suffix: 'M', label: 'Annual donations' },
+      { value: growthPercentage, suffix: '%', label: 'Growth rate' },
     ];
-  }, [chapelsData, chapelsSummary, summaryTotals]);
+  }, [chapelsData.length, summaryTotals]);
 
   const selectedChapelSummary = useMemo(() => {
     if (!chapelsSummary.length) return null;
@@ -139,35 +113,23 @@ export default function LandingPage() {
   }, [selectedChapelSummary]);
 
   const heroMetrics = useMemo(() => {
-    if (chapelsSummary.length > 0) {
-      const weeklyCollection = chapelsSummary.reduce((sum, chapel) => sum + chapel.latestDonation, 0);
-      const activeMembers = chapelsSummary.reduce((sum, chapel) => sum + chapel.latestMembers, 0);
-      const previousTotal = chapelsSummary.reduce((sum, chapel) => sum + (chapel.series.at(-2) ?? 0), 0);
-      const growth = previousTotal === 0 ? 0 : Math.round(((weeklyCollection - previousTotal) / previousTotal) * 100);
-      return {
-        weeklyCollection: `₱${weeklyCollection.toLocaleString('en-PH')}`,
-        members: activeMembers.toLocaleString('en-PH'),
-        growth: `+${growth}%`,
-      };
-    }
+    const weeklyCollection = chapelsSummary.reduce((sum, chapel) => sum + chapel.latestDonation, 0);
+    const activeMembers = chapelsSummary.reduce((sum, chapel) => sum + chapel.latestMembers, 0);
+    const previousTotal = chapelsSummary.reduce((sum, chapel) => sum + (chapel.series.at(-2) ?? 0), 0);
+    const growth = previousTotal === 0 ? 0 : Math.round(((weeklyCollection - previousTotal) / previousTotal) * 100);
 
     return {
-      weeklyCollection: '₱128,450',
-      members: '1,284',
-      growth: '+12.3%',
+      weeklyCollection: `₱${weeklyCollection.toLocaleString('en-PH')}`,
+      members: activeMembers.toLocaleString('en-PH'),
+      growth: `${growth >= 0 ? '+' : ''}${growth}%`,
     };
   }, [chapelsSummary]);
 
-  const donationTickerItems = useMemo(() => {
-    if (chapelsSummary.length > 0) {
-      return chapelsSummary.map((chapel) => ({
-        name: chapel.name,
-        amount: `₱${chapel.latestDonation.toLocaleString('en-PH')}`,
-        time: 'Latest',
-      }));
-    }
-    return defaultDonationTickerItems;
-  }, [chapelsSummary]);
+  const donationTickerItems = useMemo(() => chapelsSummary.map((chapel) => ({
+    name: chapel.name,
+    amount: `₱${chapel.latestDonation.toLocaleString('en-PH')}`,
+    time: 'Latest',
+  })), [chapelsSummary]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -495,28 +457,32 @@ export default function LandingPage() {
                 <div className="preview-top">
                   <div className="preview-icon">⛪</div>
                   <div>
-                    <p className="preview-label">{selectedChapelSummary?.name ?? 'St. Joseph Parish'}</p>
+                    <p className="preview-label">{selectedChapelSummary ? selectedChapelSummary.name : 'Loading chapel data'}</p>
                     <p className="preview-sub">
-                      {selectedLatestReport ? `${selectedLatestReport.weekLabel} · ${selectedChapelSummary?.latestMembers ?? 0} members` : 'Latest chapel account data'}
+                      {selectedChapelSummary
+                        ? `${selectedChapelSummary.latestMembers.toLocaleString('en-PH')} members · latest`
+                        : 'Loading chapel account data'}
                     </p>
                   </div>
                 </div>
                 <div className="preview-footer">
                   <span>
-                    <strong>{selectedChapelSummary ? `₱${selectedChapelSummary.latestDonation.toLocaleString('en-PH')}` : '₱42k'}</strong> weekly
+                    <strong>{selectedChapelSummary ? `₱${selectedChapelSummary.latestDonation.toLocaleString('en-PH')}` : '₱0'}</strong> weekly
                   </span>
                   <span className="preview-pill">
-                    {selectedChapelSummary ? `${selectedChapelSummary.series.length > 1 ? `${Math.round(((selectedChapelSummary.latestDonation - (selectedChapelSummary.series.at(-2) ?? selectedChapelSummary.latestDonation)) / (selectedChapelSummary.series.at(-2) ?? selectedChapelSummary.latestDonation)) * 100)}%` : '+0%'}` : '+8.2%'}
+                    {selectedChapelSummary
+                      ? `${selectedChapelSummary.series.length > 1 ? `${Math.round(((selectedChapelSummary.latestDonation - (selectedChapelSummary.series.at(-2) ?? selectedChapelSummary.latestDonation)) / (selectedChapelSummary.series.at(-2) ?? selectedChapelSummary.latestDonation)) * 100)}%` : '+0%'}`
+                      : '+0%'}
                   </span>
                 </div>
                 <div className="progress-labels">
                   <span>Monthly Goal</span>
-                  <span>{selectedChapelSummary ? `₱${selectedChapelSummary.latestDonation.toLocaleString('en-PH')} / ₱50,000` : '₱42,000 / ₱50,000'}</span>
+                  <span>{selectedChapelSummary ? `₱${selectedChapelSummary.latestDonation.toLocaleString('en-PH')} / ₱50,000` : '₱0 / ₱50,000'}</span>
                 </div>
                 <div className="progress-track">
                   <div
                     className="progress-fill"
-                    style={{ width: `${selectedChapelSummary ? Math.min(Math.round((selectedChapelSummary.latestDonation / 50000) * 100), 100) : 84}%` }}
+                    style={{ width: `${selectedChapelSummary ? Math.min(Math.round((selectedChapelSummary.latestDonation / 50000) * 100), 100) : 0}%` }}
                   />
                 </div>
               </div>
@@ -528,7 +494,7 @@ export default function LandingPage() {
         <section className="church-section" id="churches">
           <div className="section-heading reveal">
             <span className="eyebrow">Our Churches</span>
-            <h2>Serving <span className="highlight">1 Parish</span> and <span className="highlight">3 Chapels</span></h2>
+            <h2>Serving <span className="highlight">4 churches</span> across the parish</h2>
           </div>
           <div className="church-grid">
             {displayChurchCards.map((church) => (
@@ -561,61 +527,88 @@ export default function LandingPage() {
           <div className="glass-card donate-card reveal">
             <div className="donate-inner">
               <div>
-                <span className="eyebrow">Donate Now</span>
+                <span className="donate-badge"><span className="donate-badge-icon">🫶</span> DONATE NOW</span>
                 <h3>Support Your <span className="highlight">Parish Community</span></h3>
                 <p>
                   Every donation helps strengthen our church community. Choose your church and make a difference today.
                 </p>
-                <div className="donate-actions">
-                  <button type="button" className="gradient-btn">Donate Now</button>
-                  <button type="button" className="hero-secondary">Learn More</button>
+                <div className="btn-group">
+                  <button type="button" className="gradient-btn">
+                    <span>🫶</span> Donate Now
+                  </button>
+                  <button type="button" className="btn-outline">
+                    <span>▶</span> Learn More
+                  </button>
                 </div>
-                <div className="donate-badges">
-                  <span>🔒 Secured</span>
-                  <span>🛡️ Encrypted</span>
-                  <span>✅ PCI Compliant</span>
+                <div className="security-badges">
+                  <span className="security-badge"><span>🔒</span> Secured</span>
+                  <span className="security-badge"><span>🛡️</span> Encrypted</span>
+                  <span className="security-badge"><span>✅</span> PCI Compliant</span>
                 </div>
               </div>
               <div className="donation-box">
-                <div className="donation-box-header">
-                  <h4>Quick Donation</h4>
+                <div className="form-title">Quick Donation</div>
+                <div className="form-subtitle">Support your church in just a few clicks</div>
+
+                <div className="form-group">
+                  <label>
+                    Select Church <span className="required">*</span>
+                  </label>
+                  <select className="glass-select donation-select" value={selectedChurch} onChange={(event) => setSelectedChurch(event.target.value)}>
+                    {chapelsSummary.map((church) => (
+                      <option key={church.chapelId} value={church.name}>{church.name}</option>
+                    ))}
+                  </select>
                 </div>
-                <select className="glass-select donation-select" value={selectedChurch} onChange={(event) => setSelectedChurch(event.target.value)}>
-                  {(chapelsSummary.length > 0 ? chapelsSummary : [
-                    { chapelId: 'st-joseph-parish', name: 'St. Joseph Parish' },
-                    { chapelId: 'st-joseph-worker', name: 'St. Joseph the Worker' },
-                    { chapelId: 'our-lady-lourdes', name: 'Our Lady of Lourdes' },
-                    { chapelId: 'sto-nino', name: 'Sto. Niño Chapel' },
-                  ]).map((church) => (
-                    <option key={church.chapelId ?? church.name} value={church.name}>{church.name}</option>
-                  ))}
-                </select>
-                <label className="donation-input-label">
-                  Desired Amount
-                  <input
-                    type="number"
-                    min="0"
-                    step="50"
-                    value={donationAmount.replace(/[^0-9]/g, '')}
-                    onChange={(event) => setDonationAmount(event.target.value)}
-                    className="glass-input donation-amount-input"
-                    placeholder="Enter amount"
-                  />
-                </label>
-                <div className="amount-grid">
-                  {['100', '250', '500', '1000'].map((amount) => (
+
+                <div className="form-group">
+                  <label>
+                    Desired Amount <span className="required">*</span>
+                  </label>
+                  <div className="amount-grid">
+                    {['100', '250', '500', '1000'].map((amount) => (
+                      <button
+                        key={amount}
+                        type="button"
+                        className={`amount-button${donationAmount.replace(/[^0-9]/g, '') === amount && !isCustomAmount ? ' active' : ''}`}
+                        onClick={() => {
+                          setDonationAmount(amount);
+                          setIsCustomAmount(false);
+                        }}
+                      >
+                        ₱{amount}
+                      </button>
+                    ))}
                     <button
-                      key={amount}
                       type="button"
-                      className={`amount-button${donationAmount.replace(/[^0-9]/g, '') === amount ? ' selected' : ''}`}
-                      onClick={() => setDonationAmount(amount)}
+                      className={`amount-button custom${isCustomAmount ? ' active' : ''}`}
+                      onClick={() => {
+                        setIsCustomAmount(true);
+                        setDonationAmount('');
+                      }}
                     >
-                      ₱{amount}
+                      Custom
                     </button>
-                  ))}
+                  </div>
+                  <div className="amount-display">
+                    Donating <span>{formattedDonationAmount || '₱0'}</span>
+                  </div>
+                  {isCustomAmount && (
+                    <div className="custom-input-wrapper">
+                      <input
+                        type="number"
+                        min="1"
+                        value={donationAmount.replace(/[^0-9]/g, '')}
+                        onChange={(event) => setDonationAmount(event.target.value)}
+                        placeholder="Enter custom amount"
+                        className="glass-input"
+                      />
+                    </div>
+                  )}
                 </div>
-                <label className="donation-input-label">
-                  Name
+
+                <div className="form-group">
+                  <label>Full Name</label>
                   <input
                     type="text"
                     value={donorName}
@@ -623,9 +616,10 @@ export default function LandingPage() {
                     className="glass-input donation-text-input"
                     placeholder="Enter your name"
                   />
-                </label>
-                <label className="donation-input-label">
-                  Number
+                </div>
+
+                <div className="form-group">
+                  <label>Phone Number</label>
                   <input
                     type="tel"
                     value={donorNumber}
@@ -633,9 +627,10 @@ export default function LandingPage() {
                     className="glass-input donation-text-input"
                     placeholder="Enter your phone number"
                   />
-                </label>
-                <label className="donation-input-label">
-                  Email
+                </div>
+
+                <div className="form-group">
+                  <label>Email Address</label>
                   <input
                     type="email"
                     value={donorEmail}
@@ -644,24 +639,35 @@ export default function LandingPage() {
                     placeholder="Enter your email"
                     disabled={donateAnonymous}
                   />
-                </label>
-                <label className="donation-input-label donate-anonymous">
-                  <input
-                    type="checkbox"
-                    checked={donateAnonymous}
-                    onChange={(event) => setDonateAnonymous(event.target.checked)}
-                  />
-                  Donate anonymously
-                </label>
+                </div>
+
+                <div className="form-group checkbox-wrapper">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={donateAnonymous}
+                      onChange={(event) => setDonateAnonymous(event.target.checked)}
+                    />
+                    <span className="label-text">
+                      Donate anonymously
+                      <span className="hint">(Your name won't appear publicly)</span>
+                    </span>
+                  </label>
+                </div>
+
                 <button
                   type="button"
                   className="gradient-btn donation-submit"
                   onClick={handleDonate}
                   disabled={isDonating || !canDonate}
                 >
-                  {isDonating ? 'Processing…' : `Donate ${formattedDonationAmount || 'Now'}`}
+                  <span>🫶</span> Donate {formattedDonationAmount || 'Now'}
                 </button>
-                {donationStatus && <p className="donation-status">{donationStatus}</p>}
+                {donationStatus && <p className="secure-note">{donationStatus}</p>}
+
+                <div className="secure-note">
+                  <span>🔒</span> Your donation is secure and encrypted
+                </div>
               </div>
             </div>
           </div>
