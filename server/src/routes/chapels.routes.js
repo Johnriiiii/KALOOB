@@ -2,6 +2,7 @@ import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { Chapel } from '../models/chapel.model.js';
 import { Member } from '../models/member.model.js';
+import { Donation } from '../models/donation.model.js';
 
 const router = Router();
 const jwtSecret = process.env.JWT_SECRET ?? 'kaloob-secret';
@@ -90,17 +91,36 @@ router.post('/:chapelId/reports', authenticateToken, async (request, response, n
 router.get('/admin/summary', async (_request, response, next) => {
   try {
     const chapels = await Chapel.find().lean();
+    const now = new Date();
+    const oneYearAgo = new Date(now);
+    oneYearAgo.setFullYear(now.getFullYear() - 1);
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const previousMonthKey = `${previousMonth.getFullYear()}-${String(previousMonth.getMonth() + 1).padStart(2, '0')}`;
 
     const summary = await Promise.all(chapels.map(async (chapel) => {
       const memberCount = await Member.countDocuments({ churchId: chapel.chapelId });
-      const reportedTotal = Array.isArray(chapel.reports)
-        ? chapel.reports.reduce((sum, report) => sum + (report.donation ?? 0), 0)
-        : 0;
-      const totalCollection = reportedTotal > 0
-        ? reportedTotal
-        : (typeof chapel.totalCollection === 'number' ? chapel.totalCollection : 0);
-      const latestDonation = chapel.reports.at(-1)?.donation ?? 0;
+      const donations = await Donation.find({ churchId: chapel.chapelId, date: { $gte: oneYearAgo } }).sort({ date: 1 }).lean();
+      const annualDonations = donations.reduce((sum, donation) => sum + (donation.amount ?? 0), 0);
+      const monthlyTotals = donations.reduce((totals, donation) => {
+        const date = new Date(donation.date);
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        totals[key] = (totals[key] || 0) + (donation.amount ?? 0);
+        return totals;
+      }, {});
+      const currentMonthDonations = monthlyTotals[currentMonthKey] || 0;
+      const previousMonthDonations = monthlyTotals[previousMonthKey] || 0;
+      const growthPercentage = previousMonthDonations === 0
+        ? currentMonthDonations > 0
+          ? 100
+          : 0
+        : Math.round(((currentMonthDonations - previousMonthDonations) / previousMonthDonations) * 100);
+      const latestDonation = donations.at(-1)?.amount ?? chapel.reports.at(-1)?.donation ?? 0;
       const latestMembers = chapel.reports.at(-1)?.members ?? 0;
+      const series = Object.keys(monthlyTotals)
+        .sort()
+        .map((key) => ({ period: key, donations: monthlyTotals[key] }));
+
       return {
         chapelId: chapel.chapelId,
         name: chapel.name,
@@ -108,12 +128,32 @@ router.get('/admin/summary', async (_request, response, next) => {
         latestDonation,
         latestMembers,
         memberCount,
-        totalCollection,
-        series: Array.isArray(chapel.reports) ? chapel.reports.map((report) => report.donation) : [],
+        annualDonations,
+        currentMonthDonations,
+        previousMonthDonations,
+        growthPercentage,
+        series,
       };
     }));
 
-    response.json({ summary });
+    const totalMembers = summary.reduce((sum, chapel) => sum + (chapel.memberCount ?? 0), 0);
+    const totalAnnualDonations = summary.reduce((sum, chapel) => sum + (chapel.annualDonations ?? 0), 0);
+    const totalCurrentMonth = summary.reduce((sum, chapel) => sum + (chapel.currentMonthDonations ?? 0), 0);
+    const totalPreviousMonth = summary.reduce((sum, chapel) => sum + (chapel.previousMonthDonations ?? 0), 0);
+    const overallGrowthPercentage = totalPreviousMonth === 0
+      ? totalCurrentMonth > 0
+        ? 100
+        : 0
+      : Math.round(((totalCurrentMonth - totalPreviousMonth) / totalPreviousMonth) * 100);
+
+    response.json({
+      summary,
+      totals: {
+        totalMembers,
+        totalAnnualDonations,
+        growthPercentage: overallGrowthPercentage,
+      },
+    });
   } catch (error) {
     next(error);
   }

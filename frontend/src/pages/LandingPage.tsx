@@ -45,6 +45,7 @@ export default function LandingPage() {
   const [selectedChurch, setSelectedChurch] = useState('St. Joseph Parish');
   const [chapelsData, setChapelsData] = useState<ChapelData[]>([]);
   const [chapelsSummary, setChapelsSummary] = useState<ChapelSummary[]>([]);
+  const [summaryTotals, setSummaryTotals] = useState<{ totalMembers: number; totalAnnualDonations: number; growthPercentage: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
   const [donationAmount, setDonationAmount] = useState('100');
@@ -98,19 +99,13 @@ export default function LandingPage() {
   }, [chapelsSummary]);
 
   const displayStatsCards = useMemo(() => {
-    if (chapelsData.length > 0 && chapelsSummary.length > 0) {
-      const totalDonations = chapelsData.reduce((sum, chapel) => sum + chapel.reports.reduce((innerSum, report) => innerSum + report.donation, 0), 0);
-      const totalMembers = chapelsSummary.reduce((sum, chapel) => sum + chapel.latestMembers, 0);
+    if (summaryTotals && chapelsData.length > 0 && chapelsSummary.length > 0) {
       const totalChurches = chapelsData.length;
-      const recentTotal = chapelsSummary.reduce((sum, chapel) => sum + (chapel.series.at(-1) ?? 0), 0);
-      const previousTotal = chapelsSummary.reduce((sum, chapel) => sum + (chapel.series.at(-2) ?? 0), 0);
-      const growth = previousTotal === 0 ? 0 : Math.round(((recentTotal - previousTotal) / previousTotal) * 100);
-
       return [
         { value: totalChurches, label: 'Churches' },
-        { value: totalMembers, label: 'KALOOB Members' },
-        { value: totalDonations / 1_000_000, suffix: 'M', label: 'Annual donations' },
-        { value: growth, suffix: '%', label: 'Growth rate' },
+        { value: summaryTotals.totalMembers, label: 'KALOOB Members' },
+        { value: summaryTotals.totalAnnualDonations / 1_000_000, suffix: 'M', label: 'Annual donations' },
+        { value: summaryTotals.growthPercentage, suffix: '%', label: 'Growth rate' },
       ];
     }
 
@@ -120,7 +115,7 @@ export default function LandingPage() {
       { value: 2.4, suffix: 'M', label: 'Annual donations' },
       { value: 15, suffix: '%', label: 'Growth rate' },
     ];
-  }, [chapelsData, chapelsSummary]);
+  }, [chapelsData, chapelsSummary, summaryTotals]);
 
   const selectedChapelSummary = useMemo(() => {
     if (!chapelsSummary.length) return null;
@@ -201,6 +196,14 @@ export default function LandingPage() {
           if (summaryPayload.summary.length > 0) {
             setSelectedChurch(summaryPayload.summary[0].name);
           }
+        }
+
+        if (summaryPayload.totals) {
+          setSummaryTotals({
+            totalMembers: summaryPayload.totals.totalMembers ?? 0,
+            totalAnnualDonations: summaryPayload.totals.totalAnnualDonations ?? 0,
+            growthPercentage: summaryPayload.totals.growthPercentage ?? 0,
+          });
         }
       } catch (error) {
         console.error('LandingPage fetch failed', error);
