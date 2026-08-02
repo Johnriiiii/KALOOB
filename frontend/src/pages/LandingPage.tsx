@@ -390,8 +390,12 @@ export default function LandingPage() {
               {loading && <p className="hero-subtext">Loading chapel data...</p>}
               {fetchError && <p className="hero-error">{fetchError}</p>}
               <div className="hero-actions">
-                <button type="button" className="hero-secondary" onClick={() => scrollToSection('about')}>Learn More</button>
-                <Link to="/login" className="hero-secondary">Explore</Link>
+                <button type="button" className="btn-neon-green" onClick={() => scrollToSection('about')}>
+                  <span>▶</span> Learn More
+                </button>
+                <Link to="/login" className="btn-neon-yellow">
+                  <span>🚀</span> Explore
+                </Link>
               </div>
             </div>
 

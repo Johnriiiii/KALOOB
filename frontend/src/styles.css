@@ -5512,7 +5512,9 @@ a {
 
   .nav-link,
   .hero-secondary,
-  .gradient-btn {
+  .gradient-btn,
+  .btn-neon-green,
+  .btn-neon-yellow {
     width: 100%;
     justify-content: center;
   }
