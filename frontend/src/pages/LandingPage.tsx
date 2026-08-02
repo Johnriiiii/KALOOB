@@ -131,58 +131,89 @@ export default function LandingPage() {
     time: 'Latest',
   })), [chapelsSummary]);
 
-  useEffect(() => {
-    const fetchData = async () => {
+  const refreshLandingData = async (skipLoading = false) => {
+    if (!skipLoading) {
       setLoading(true);
-      setFetchError('');
+    }
+    setFetchError('');
 
-      try {
-        const [chapelsResponse, summaryResponse] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/chapels`),
-          fetch(`${API_BASE_URL}/api/chapels/admin/summary`),
-        ]);
+    try {
+      const [chapelsResponse, summaryResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/chapels`),
+        fetch(`${API_BASE_URL}/api/chapels/admin/summary`),
+      ]);
 
-        if (!chapelsResponse.ok || !summaryResponse.ok) {
-          throw new Error(`API error: ${chapelsResponse.status} / ${summaryResponse.status}`);
-        }
+      if (!chapelsResponse.ok || !summaryResponse.ok) {
+        throw new Error(`API error: ${chapelsResponse.status} / ${summaryResponse.status}`);
+      }
 
-        const chapelsPayload = await chapelsResponse.json();
-        const summaryPayload = await summaryResponse.json();
+      const chapelsPayload = await chapelsResponse.json();
+      const summaryPayload = await summaryResponse.json();
 
-        if (Array.isArray(chapelsPayload.chapels)) {
-          setChapelsData(chapelsPayload.chapels);
-        }
+      if (Array.isArray(chapelsPayload.chapels)) {
+        setChapelsData(chapelsPayload.chapels);
+      }
 
-        if (Array.isArray(summaryPayload.summary)) {
-          setChapelsSummary(summaryPayload.summary);
-          if (summaryPayload.summary.length > 0) {
-            setSelectedChurch(summaryPayload.summary[0].name);
-          }
-        }
+      if (Array.isArray(summaryPayload.summary)) {
+        setChapelsSummary(summaryPayload.summary);
+        setSelectedChurch((currentChurch) => currentChurch || (summaryPayload.summary.length > 0 ? summaryPayload.summary[0].name : ''));
+      }
 
-        if (summaryPayload.totals) {
-          setSummaryTotals({
-            totalMembers: summaryPayload.totals.totalMembers ?? 0,
-            totalAnnualDonations: summaryPayload.totals.totalAnnualDonations ?? 0,
-            growthPercentage: summaryPayload.totals.growthPercentage ?? 0,
-          });
-        }
-      } catch (error) {
-        console.error('LandingPage fetch failed', error);
-        setFetchError(`Unable to load landing page statistics. ${error instanceof Error ? error.message : ''}`);
-      } finally {
+      if (summaryPayload.totals) {
+        setSummaryTotals({
+          totalMembers: summaryPayload.totals.totalMembers ?? 0,
+          totalAnnualDonations: summaryPayload.totals.totalAnnualDonations ?? 0,
+          growthPercentage: summaryPayload.totals.growthPercentage ?? 0,
+        });
+      }
+    } catch (error) {
+      console.error('LandingPage fetch failed', error);
+      setFetchError(`Unable to load landing page statistics. ${error instanceof Error ? error.message : ''}`);
+    } finally {
+      if (!skipLoading) {
         setLoading(false);
       }
-    };
+    }
+  };
 
-    void fetchData();
+  useEffect(() => {
+    void refreshLandingData();
   }, []);
 
   useEffect(() => {
-    if (chapelsSummary.length > 0) {
-      setSelectedChurch(chapelsSummary[0].name);
+    const token = window.localStorage.getItem('kaloob_token');
+    let eventSource: EventSource | null = null;
+    let pollingInterval: number | null = null;
+
+    const handleUpdate = () => {
+      void refreshLandingData(true);
+    };
+
+    if (token) {
+      const url = `${API_BASE_URL}/api/reports/stream?token=${encodeURIComponent(token)}`;
+      eventSource = new EventSource(url);
+      eventSource.addEventListener('donation', handleUpdate as EventListener);
+      eventSource.addEventListener('message', handleUpdate as EventListener);
+      eventSource.onerror = () => {
+        // EventSource will automatically retry when the connection drops.
+      };
+    } else {
+      pollingInterval = window.setInterval(() => {
+        void refreshLandingData(true);
+      }, 20000);
     }
-  }, [chapelsSummary]);
+
+    return () => {
+      if (eventSource) {
+        eventSource.removeEventListener('donation', handleUpdate as EventListener);
+        eventSource.removeEventListener('message', handleUpdate as EventListener);
+        eventSource.close();
+      }
+      if (pollingInterval) {
+        window.clearInterval(pollingInterval);
+      }
+    };
+  }, []);
 
   const handleDonate = async () => {
     if (!donationAmount) {
