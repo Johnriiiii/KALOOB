@@ -42,3 +42,7 @@ yarn-error.*
 \.env
 server/.env
 frontend/.env
+
+# temporary uploads and test artifacts
+server/uploads/
+server/tmp_upload_test.xlsx

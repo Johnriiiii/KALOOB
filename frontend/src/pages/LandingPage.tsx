@@ -50,16 +50,19 @@ export default function LandingPage() {
   const [donationStatus, setDonationStatus] = useState('');
   const [isDonating, setIsDonating] = useState(false);
 
-  const formattedDonationAmount = useMemo(() => {
-    const numericValue = Number(donationAmount.toString().replace(/[^0-9]/g, ''));
-    return numericValue > 0 ? `₱${numericValue.toLocaleString('en-PH')}` : '';
+  const numericDonationAmount = useMemo(() => {
+    return Number(donationAmount.toString().replace(/[^0-9]/g, '')) || 0;
   }, [donationAmount]);
 
-  const canDonate = donateAnonymous || (
+  const formattedDonationAmount = useMemo(() => {
+    return numericDonationAmount > 0 ? `₱${numericDonationAmount.toLocaleString('en-PH')}` : '';
+  }, [numericDonationAmount]);
+
+  const canDonate = numericDonationAmount > 0 && (donateAnonymous || (
     donorName.trim().length > 0 &&
     donorNumber.trim().length > 0 &&
     donorEmail.trim().length > 0
-  );
+  ));
 
   const displayChurchCards = useMemo(() => {
     if (chapelsSummary.length === 0) return [];
@@ -156,7 +159,12 @@ export default function LandingPage() {
 
       if (Array.isArray(summaryPayload.summary)) {
         setChapelsSummary(summaryPayload.summary);
-        setSelectedChurch((currentChurch) => currentChurch || (summaryPayload.summary.length > 0 ? summaryPayload.summary[0].name : ''));
+        setSelectedChurch((currentChurch) => {
+          const defaultChurch = summaryPayload.summary.length > 0 ? summaryPayload.summary[0].name : '';
+          return currentChurch && summaryPayload.summary.some((chapel) => chapel.name === currentChurch)
+            ? currentChurch
+            : defaultChurch;
+        });
       }
 
       if (summaryPayload.totals) {
@@ -242,14 +250,24 @@ export default function LandingPage() {
     setDonationStatus('');
 
     try {
-      const amountValue = Number(donationAmount.replace(/[^0-9]/g, '')); 
+      if (numericDonationAmount <= 0) {
+        setDonationStatus('Enter a valid donation amount.');
+        return;
+      }
+
+      const churchName = selectedChapelSummary?.name || selectedChurch;
+      if (!churchName) {
+        setDonationStatus('Select a chapel before donating.');
+        return;
+      }
+
       const body = {
-        amount: amountValue,
+        amount: numericDonationAmount,
         paymentMethod: 'bank_transfer',
         donorName: donateAnonymous ? 'Anonymous Donor' : donorName.trim(),
         donorEmail: donateAnonymous ? 'anonymous@kaloob.local' : donorEmail.trim(),
         donorPhone: donateAnonymous ? '' : donorNumber.trim(),
-        churchName: selectedChapelSummary?.name ?? selectedChurch,
+        churchName,
         purpose: donateAnonymous ? 'Anonymous parish donation' : 'Parish donation',
       };
 
