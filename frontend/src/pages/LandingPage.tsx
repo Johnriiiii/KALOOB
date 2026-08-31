@@ -1,7 +1,40 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:4000';
+const fallbackChapels = [
+  { chapelId: 'st-joseph-parish', name: 'St. Joseph Parish', color: '#4a7a3a' },
+  { chapelId: 'st-joseph-worker', name: 'St. Joseph the Worker', color: '#d4c04a' },
+  { chapelId: 'our-lady-lourdes', name: 'Our Lady of Lourdes', color: '#3b82f6' },
+  { chapelId: 'sto-nino', name: 'Sto. Niño Chapel', color: '#dc2626' },
+] as const;
+
+const fallbackSummary = fallbackChapels.map((chapel, index) => ({
+  chapelId: chapel.chapelId,
+  name: chapel.name,
+  color: chapel.color,
+  latestDonation: [1200, 2400, 1500, 1800][index] ?? 1000,
+  latestMembers: [310, 270, 328, 245][index] ?? 200,
+  series: [200, 350, 420, 510, 820, 980, 1100, 1200].map((value, offset) => (index + 1) * value + offset * 40),
+}));
+
+const fallbackTotals = {
+  totalMembers: fallbackSummary.reduce((sum, chapel) => sum + chapel.latestMembers, 0),
+  totalAnnualDonations: fallbackSummary.reduce((sum, chapel) => sum + chapel.latestDonation, 0),
+  growthPercentage: 18,
+};
+
+const API_BASE_URL = (() => {
+  const configured = import.meta.env.VITE_API_BASE_URL;
+  if (configured && configured.trim()) {
+    return configured.replace(/\/$/, '');
+  }
+
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+
+  return 'http://127.0.0.1:4000';
+})();
 
 type ChapelReport = {
   weekLabel: string;
@@ -35,10 +68,10 @@ const notifications = [
 ];
 
 export default function LandingPage() {
-  const [selectedChurch, setSelectedChurch] = useState('');
+  const [selectedChurch, setSelectedChurch] = useState<string>(fallbackChapels[0].name);
   const [chapelsData, setChapelsData] = useState<ChapelData[]>([]);
-  const [chapelsSummary, setChapelsSummary] = useState<ChapelSummary[]>([]);
-  const [summaryTotals, setSummaryTotals] = useState<{ totalMembers: number; totalAnnualDonations: number; growthPercentage: number } | null>(null);
+  const [chapelsSummary, setChapelsSummary] = useState<ChapelSummary[]>(fallbackSummary);
+  const [summaryTotals, setSummaryTotals] = useState<{ totalMembers: number; totalAnnualDonations: number; growthPercentage: number } | null>(fallbackTotals);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
   const [donationAmount, setDonationAmount] = useState('100');
@@ -152,30 +185,37 @@ export default function LandingPage() {
 
       const chapelsPayload = await chapelsResponse.json();
       const summaryPayload = await summaryResponse.json();
+      const nextSummary = Array.isArray(summaryPayload?.summary) ? summaryPayload.summary : fallbackSummary;
 
-      if (Array.isArray(chapelsPayload.chapels)) {
+      if (Array.isArray(chapelsPayload?.chapels)) {
         setChapelsData(chapelsPayload.chapels);
       }
 
-      if (Array.isArray(summaryPayload.summary)) {
-        setChapelsSummary(summaryPayload.summary);
+      if (nextSummary.length > 0) {
+        setChapelsSummary(nextSummary);
         setSelectedChurch((currentChurch) => {
-          const defaultChurch = summaryPayload.summary.length > 0 ? summaryPayload.summary[0].name : '';
-          return currentChurch && summaryPayload.summary.some((chapel) => chapel.name === currentChurch)
+          const defaultChurch = nextSummary[0]?.name ?? fallbackChapels[0].name;
+          return currentChurch && nextSummary.some((chapel) => chapel.name === currentChurch)
             ? currentChurch
             : defaultChurch;
         });
+      } else {
+        setChapelsSummary(fallbackSummary);
+        setSelectedChurch(fallbackChapels[0].name);
       }
 
-      if (summaryPayload.totals) {
+      if (summaryPayload?.totals) {
         setSummaryTotals({
-          totalMembers: summaryPayload.totals.totalMembers ?? 0,
-          totalAnnualDonations: summaryPayload.totals.totalAnnualDonations ?? 0,
-          growthPercentage: summaryPayload.totals.growthPercentage ?? 0,
+          totalMembers: summaryPayload.totals.totalMembers ?? fallbackTotals.totalMembers,
+          totalAnnualDonations: summaryPayload.totals.totalAnnualDonations ?? fallbackTotals.totalAnnualDonations,
+          growthPercentage: summaryPayload.totals.growthPercentage ?? fallbackTotals.growthPercentage,
         });
       }
     } catch (error) {
       console.error('LandingPage fetch failed', error);
+      setChapelsSummary(fallbackSummary);
+      setSummaryTotals(fallbackTotals);
+      setSelectedChurch(fallbackChapels[0].name);
       setFetchError(`Unable to load landing page statistics. ${error instanceof Error ? error.message : ''}`);
     } finally {
       if (!skipLoading) {
@@ -708,7 +748,7 @@ export default function LandingPage() {
                   type="button"
                   className="gradient-btn donation-submit"
                   onClick={handleDonate}
-                  disabled={isDonating || !canDonate}
+                  disabled={isDonating || !canDonate || !selectedChapelSummary}
                 >
                   <span>🫶</span> Donate {formattedDonationAmount || 'Now'}
                 </button>
