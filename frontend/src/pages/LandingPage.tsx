@@ -26,14 +26,10 @@ const fallbackTotals = {
 const API_BASE_URL = (() => {
   const configured = import.meta.env.VITE_API_BASE_URL;
   if (configured && configured.trim()) {
-    return configured.replace(/\/$/, '');
+    return configured.trim().replace(/\/$/, '');
   }
 
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin;
-  }
-
-  return 'http://127.0.0.1:4000';
+  return '';
 })();
 
 type ChapelReport = {

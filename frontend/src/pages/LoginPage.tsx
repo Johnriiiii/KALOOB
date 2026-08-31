@@ -28,11 +28,7 @@ export default function LoginPage({ onLogin, apiUrl }: { onLogin: (session: User
     setError('');
 
     try {
-      const trimmedApiUrl = apiUrl?.trim();
-      if (!trimmedApiUrl) {
-        throw new Error('Missing API URL. Set VITE_API_BASE_URL in your frontend environment.');
-      }
-
+      const trimmedApiUrl = apiUrl?.trim() || '';
       const response = await fetch(`${trimmedApiUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
